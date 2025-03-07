@@ -1,0 +1,32 @@
+#ifndef PLUGINCONSTANTS_HPP
+#define PLUGINCONSTANTS_HPP
+
+#include <discord-game-sdk/types.h>
+
+namespace DiscordRichPresence::Constants
+{
+constexpr discord::ClientId DISCORD_CLIENT_ID = @DISCORD_CLIENT_ID@;
+
+constexpr char PLUGIN_ID[] = "com.thebill2001.qtcreator.discordrichpresence";
+constexpr char RELOAD_ACTION_ID[] = "com.thebill2001.qtcreator.discordrichpresence.reload";
+
+constexpr char OPTIONS_CATEGORY[] = "D.Discord";
+constexpr char OPTIONS_PAGE_ID[] = "R.RichPresence.thebill2001";
+
+constexpr char OPTIONS_GROUP[] = "Discord";
+constexpr char OPTIONS_RECONNECT_DELAY[] = "ReconnectDelay";
+constexpr char OPTIONS_SPECTATING_ENABLED[] = "SpectatingEnabled";
+constexpr int OPTIONS_RECONNECT_DELAY_DEFAULT = 5;
+constexpr bool OPTIONS_SPECTATING_ENABLED_DEFAULT = true;
+
+constexpr char STATE_IDLE[] = "Idle";
+constexpr char STATE_EDITING_FILE[] = "Editing a file";
+constexpr char STATE_DESIGN_UI[] = "Designing an UI";
+constexpr char STATE_WORKING_ON_PROJECT[] = "Working on project";
+constexpr char DETAILS_STARTUP_SCREEN[] = "Startup Screen";
+
+constexpr char MAIN_LARGE_IMAGE[] = "https://raw.githubusercontent.com/qt-creator/qt-creator/refs/heads/master/src/app/images/logo/512/QtProject-qtcreator.png";
+constexpr char MAIN_LARGE_TEXT[] = "Working with Qt Creator";
+} // namespace DiscordRichPresence::Constants
+
+#endif // PLUGINCONSTANTS_HPP
