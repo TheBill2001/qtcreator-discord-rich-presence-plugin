@@ -1,3 +1,4 @@
+# Ref: https://github.com/CJCombrink/SpellChecker-Plugin/blob/2ccddd607e4f6da788eb7000a6d97ae8dfd0c4ee/.github/workflows/build.yaml
 name: Build
 
 on:
@@ -8,28 +9,21 @@ on:
     branches: [ "main" ]
 
 env:
-  QT_VERSION: 6.8.2
-  QTCREATOR_VERSION: 15.0.1
-  KF_VERSION: 6.11.0
-  DISCORD_GAME_SDK_VERSION: 3.2.1
+  QT_VERSION: "6.8.2"
+  QT_CREATOR_VERSION: "15.0.0"
+  KF_VERSION: "6.11.0"
+  DISCORD_GAME_SDK_VERSION: "3.2.1"
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    name: "Prepare"
-    outputs:
-      qt_version: ${{ env.QT_VERSION }}
-      qtcreator_version: ${{ env.QTCREATOR_VERSION }}
-      kf_version: ${{ env.KF_VERSION }}
-      qtcreator_version_major: ${{ steps.prepare.outputs.qtcreator_version_major }}
-    steps:
-    - id: prepare
-      run: echo "qtcreator_version_major=${QTCREATOR_VERSION%%.*}" >> $GITHUB_OUTPUT
   discord_game_sdk:
     runs-on: ubuntu-latest
-    name: "Prepare Discord Game SDK"
+    name: Prepare Discord Game SDK
     env:
-      DISCORD_GAME_SDK_PATH: "${{github.workspace}}/downloads/discord_game_sdk"
+      DISCORD_GAME_SDK_PATH: downloads/discord_game_sdk
     outputs:
       cache_key: ${{ steps.cache.outputs.cache-primary-key }}
     steps:
@@ -37,182 +31,183 @@ jobs:
       id: cache
       uses: actions/cache/restore@v4
       with:
-        key: "discord_game_sdk_${{env.DISCORD_GAME_SDK_VERSION}}"
-        path: "${{env.DISCORD_GAME_SDK_PATH}}"
+        key: discord_game_sdk_v${{ env.DISCORD_GAME_SDK_VERSION }}
+        path: ${{ env.DISCORD_GAME_SDK_PATH }}
+        enableCrossOsArchive: true
     - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
       run: |
-        mkdir -p "${{github.workspace}}/downloads"
-        curl -JL -o "${{env.DISCORD_GAME_SDK_PATH}}.zip" "https://dl-game-sdk.discordapp.net/${{env.DISCORD_GAME_SDK_VERSION}}/discord_game_sdk.zip"
-        unzip -d "${{env.DISCORD_GAME_SDK_PATH}}" "${{env.DISCORD_GAME_SDK_PATH}}.zip"
+        mkdir -p "downloads"
+        curl -JL -o "${{ env.DISCORD_GAME_SDK_PATH }}.zip" "https://dl-game-sdk.discordapp.net/${{ env.DISCORD_GAME_SDK_VERSION }}/discord_game_sdk.zip"
+        unzip -d "${{ env.DISCORD_GAME_SDK_PATH }}" "${{ env.DISCORD_GAME_SDK_PATH }}.zip"
     - name: Save Discord Game SDK cache
       uses: actions/cache/save@v4
       with:
         key: ${{ steps.cache.outputs.cache-primary-key }}
-        path: "${{env.DISCORD_GAME_SDK_PATH}}"
+        path: "${{ env.DISCORD_GAME_SDK_PATH }}"
+        enableCrossOsArchive: true
       if: ${{ steps.cache.outputs.cache-hit != 'true' }}
-  linux_x64_build:
-    runs-on: ubuntu-latest
-    name: "Build Linux x64"
-    needs: [prepare, discord_game_sdk]
+  build:
+    name: Build ${{ matrix.config.name }}
+    needs: [discord_game_sdk]
+    runs-on: ${{ matrix.config.runner }}
     env:
-      DISCORD_GAME_SDK_CACHE_KEY: "${{needs.discord_game_sdk.outputs.cache_key}}"
-      DISCORD_GAME_SDK_PATH: "${{github.workspace}}/downloads/discord_game_sdk"
-      QT_CACHE_KEY: "linux_x64_qt_${{needs.prepare.outputs.qt_version}}_${{needs.prepare.outputs.qtcreator_version}}"
-      INSTALL_QT_DIR: "${{github.workspace}}/downloads"
-      ECM_CACHE_KEY: "linux_x64_ecm_${{needs.prepare.outputs.kf_version}}"
-      ECM_CHECKOUT_PATH: "${{github.workspace}}/downloads/extra-cmake-modules"
-      INSTALL_ECM_DIR: "${{github.workspace}}/downloads/extra-cmake-modules/install"
+      OS: ${{ matrix.config.name }}
+      DISCORD_GAME_SDK_CACHE_KEY: ${{ needs.discord_game_sdk.outputs.cache_key }}
+      DISCORD_GAME_SDK_PATH: downloads/discord_game_sdk
+      ECM_CHECKOUT_PATH: downloads/extra-cmake-modules
+      ECM_INSTALL_DIR: downloads/extra-cmake-modules/install
+      QT_CREATOR_DIR: downloads/qtcreator
+    strategy:
+      matrix:
+        config:
+        - name: Windows x64
+          runner: windows-latest
+          qt_host: windows
+          qt_arch: win64_msvc2022_64
+          qtc_platform: windows_x64
+        - name: Linux x64
+          runner: ubuntu-latest
+          qt_host: linux
+          qt_arch: linux_gcc_64
+          qtc_platform: linux_x64
+        - name: MacOS x64
+          runner: macos-13
+          qt_host: mac
+          qt_arch: clang_64
+          qtc_platform: mac_x64
+      fail-fast: false
     steps:
-    - name: Checkout repo
+    - name: Checkout ${{ github.repository }}
       uses: actions/checkout@v4
     - name: Restore Discord Game SDK cache
       uses: actions/cache/restore@v4
       with:
-        key: "${{env.DISCORD_GAME_SDK_CACHE_KEY}}"
-        path: "${{env.DISCORD_GAME_SDK_PATH}}"
-    - name: Install Qt
+        key: ${{ env.DISCORD_GAME_SDK_CACHE_KEY }}
+        path: ${{ env.DISCORD_GAME_SDK_PATH }}
+        enableCrossOsArchive: true
+    - name: Download Qt
       uses: jurplel/install-qt-action@v3
       with:
-        version: "${{env.QT_VERSION}}"
-        dir: "${{env.INSTALL_QT_DIR}}"
-        host: 'linux'
-        target: 'desktop'
-        arch: 'linux_gcc_64'
-        modules: 'qt5compat'
-        tools: 'tools_qtcreator_gui,qt.tools.qtcreator_gui tools_qtcreator_gui,qt.tools.qtcreatordev'
+        version: ${{ env.QT_VERSION }}
+        dir: downloads
+        host: ${{ matrix.config.qt_host }}
+        target: desktop
+        arch: ${{ matrix.config.qt_arch }}
+        modules: qt5compat
         cache: true
-        cache-key-prefix: "${{env.QT_CACHE_KEY}}"
+    - name: Restore Qt Creator cache
+      id: qtcreator-cache
+      uses: actions/cache/restore@v4
+      with:
+        key: qtcreator_${{ env.QT_CREATOR_VERSION }}_${{ runner.os }}_${{ runner.arch }}
+        path: ${{ env.QT_CREATOR_DIR }}
+    - name: Download Qt Creator
+      if: ${{ steps.qtcreator-cache.outputs.cache-hit != 'true' }}
+      run: |
+        QT_CREATOR_BASE_URL="https://download.qt.io/official_releases/qtcreator/${QT_CREATOR_VERSION%.*}/${QT_CREATOR_VERSION}/installer_source/${{ matrix.config.qtc_platform }}"
+        curl -JL -o "downloads/qtcreator.7z" "$QT_CREATOR_BASE_URL/qtcreator.7z"
+        curl -JL -o "downloads/qtcreator_dev.7z" "$QT_CREATOR_BASE_URL/qtcreator_dev.7z"
+        7z x downloads/qtcreator.7z -o"$QT_CREATOR_DIR" -y
+        7z x downloads/qtcreator_dev.7z -o"$QT_CREATOR_DIR" -y
+    - name: Save Qt Creator cache
+      uses: actions/cache/save@v4
+      with:
+        key: ${{ steps.qtcreator-cache.outputs.cache-primary-key }}
+        path: ${{ env.QT_CREATOR_DIR }}
+      if: ${{ steps.qtcreator-cache.outputs.cache-hit != 'true' }}
     - name: Restore ECM cache
       id: ecm-cache
       uses: actions/cache/restore@v4
       with:
-        key: "${{env.ECM_CACHE_KEY}}"
-        path: "${{env.INSTALL_ECM_DIR}}"
-    - name: Checkout ECM
+        key: extra-cmake-modules_${{ runner.os }}_${{ runner.arch }}
+        path: ${{ env.ECM_INSTALL_DIR }}
+    - name: Checkout KDE/extra-cmake-modules
       uses: actions/checkout@v4
       if: ${{ steps.ecm-cache.outputs.cache-hit != 'true' }}
       with:
-        repository: "KDE/extra-cmake-modules"
-        path: "${{env.ECM_CHECKOUT_PATH}}"
-        ref: "v${{env.KF_VERSION}}"
+        repository: KDE/extra-cmake-modules
+        path: ${{ env.ECM_CHECKOUT_PATH }}
+        ref: v${{ env.KF_VERSION }}
     - name: Build ECM
+      shell: bash
       if: ${{ steps.ecm-cache.outputs.cache-hit != 'true' }}
       run: |
-        cmake -S "${{env.ECM_CHECKOUT_PATH}}" -B "${{env.ECM_CHECKOUT_PATH}}/build" \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX="${{env.INSTALL_ECM_DIR}}" \
-          -DBUILD_TESTING=OFF \
-          -DBUILD_QTHELP_DOCS=OFF \
-          -DBUILD_HTML_DOCS=OFF
-        cmake --build "${{env.ECM_CHECKOUT_PATH}}/build"
-        cmake --install "${{env.ECM_CHECKOUT_PATH}}/build"
+        case "${{ runner.os }}" in
+          "Windows")
+            cmake -G "Visual Studio 17 2022" -S "${{ env.ECM_CHECKOUT_PATH }}" -B "${{ env.ECM_CHECKOUT_PATH }}/build" \
+              -DCMAKE_INSTALL_PREFIX="${{ env.ECM_INSTALL_DIR }}" \
+              -DBUILD_TESTING=OFF \
+              -DBUILD_QTHELP_DOCS=OFF \
+              -DBUILD_HTML_DOCS=OFF
+            cmake --build "${{ env.ECM_CHECKOUT_PATH }}/build" --config Release
+            ;;
+          "Linux" | "macOS")
+            cmake -S "${{ env.ECM_CHECKOUT_PATH }}" -B "${{ env.ECM_CHECKOUT_PATH }}/build" \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="${{ env.ECM_INSTALL_DIR }}" \
+              -DBUILD_TESTING=OFF \
+              -DBUILD_QTHELP_DOCS=OFF \
+              -DBUILD_HTML_DOCS=OFF
+            cmake --build "${{ env.ECM_CHECKOUT_PATH }}/build"
+            ;;
+          *)
+            echo "Unknow system ${{ runner.os }}"
+            exit 1
+        esac
+
+        cmake --install "${{ env.ECM_CHECKOUT_PATH }}/build"
     - name: Save ECM cache
       uses: actions/cache/save@v4
       with:
         key: ${{ steps.ecm-cache.outputs.cache-primary-key }}
-        path: "${{env.INSTALL_ECM_DIR}}"
+        path: ${{ env.ECM_INSTALL_DIR }}
       if: ${{ steps.ecm-cache.outputs.cache-hit != 'true' }}
-    - name: Build
+    - name: Build plugin
       run: |
-        cmake -S . -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=install \
-          -DCMAKE_PREFIX_PATH="${{env.INSTALL_ECM_DIR}};${{env.INSTALL_QT_DIR}}/Qt/Tools/QtCreator" \
-          -DDISCORD_GAMESDK_PATH="${{env.DISCORD_GAME_SDK_PATH}}" \
-          -DBUILD_PORTABLE=OFF
-        cmake --build build
+        case "${{ runner.os }}" in
+          "Windows")
+            cmake -G "Visual Studio 17 2022" -S . -B build \
+              -DCMAKE_INSTALL_PREFIX=install \
+              -DCMAKE_PREFIX_PATH="${{ env.ECM_INSTALL_DIR }};${{ env.QT_CREATOR_DIR }}" \
+              -DDISCORD_GAMESDK_PATH="${{ env.DISCORD_GAME_SDK_PATH }}"
+            cmake --build build --config Release
+            ;;
+          "Linux" | "macOS")
+            cmake -S . -B build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=install \
+              -DCMAKE_PREFIX_PATH="${{ env.ECM_INSTALL_DIR }};${{ env.QT_CREATOR_DIR }};${{ env.QT_CREATOR_DIR }}/Qt Creator.app/Contents/Resources" \
+              -DDISCORD_GAMESDK_PATH="${{ env.DISCORD_GAME_SDK_PATH }}"
+            cmake --build build
+            ;;
+          *)
+            echo "Unknow system ${{ runner.os }}"
+            exit 1
+        esac
+
         cmake --install build
-    - name: Build portable
+
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          cmake -S . -B build_portable \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=install_portable \
+              -DCMAKE_PREFIX_PATH="${{ env.ECM_INSTALL_DIR }};${{ env.QT_CREATOR_DIR }}" \
+              -DDISCORD_GAMESDK_PATH="${{ env.DISCORD_GAME_SDK_PATH }}" \
+              -DBUILD_PORTABLE=ON
+          cmake --build build_portable
+          cmake --install build_portable
+        fi
+    - id: qtcreator_version_major
       run: |
-        cmake -S . -B build_portable \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=install_portable \
-          -DCMAKE_PREFIX_PATH="${{env.INSTALL_ECM_DIR}};${{env.INSTALL_QT_DIR}}/Qt/Tools/QtCreator" \
-          -DDISCORD_GAMESDK_PATH="${{env.DISCORD_GAME_SDK_PATH}}" \
-          -DBUILD_PORTABLE=ON
-        cmake --build build_portable
-        cmake --install build_portable
+        echo "qtcreator_version_major=${QT_CREATOR_VERSION%%.*}" >> $GITHUB_OUTPUT
     - name: Upload build
       uses: actions/upload-artifact@v4
       with:
-        name: "qtcreator${{needs.prepare.outputs.qtcreator_version_major}}-discord-rich-presence-plugin-linux-x64"
+        name: "qtcreator${{ steps.qtcreator_version_major.outputs.qtcreator_version_major }}-discord-rich-presence-plugin-${{ matrix.config.qtc_platform }}"
         path: install/
     - name: Upload portable build
+      if: ${{ runner.os == 'Linux' }}
       uses: actions/upload-artifact@v4
       with:
-        name: "qtcreator${{needs.prepare.outputs.qtcreator_version_major}}-discord-rich-presence-plugin-linux-x64-portable"
+        name: "qtcreator${{ steps.qtcreator_version_major.outputs.qtcreator_version_major }}-discord-rich-presence-plugin-${{ matrix.config.qtc_platform }}-portable"
         path: install_portable/
-  windows_x64_build:
-    runs-on: windows-latest
-    name: "Build Windows x64"
-    needs: [prepare, discord_game_sdk]
-    env:
-      DISCORD_GAME_SDK_CACHE_KEY: "${{needs.discord_game_sdk.outputs.cache_key}}"
-      DISCORD_GAME_SDK_PATH: "${{github.workspace}}\\downloads\\discord_game_sdk"
-      QT_CACHE_KEY: "win64_msvc2022_qt_${{needs.prepare.outputs.qt_version}}_${{needs.prepare.outputs.qtcreator_version}}"
-      INSTALL_QT_DIR: "${{github.workspace}}\\downloads"
-      ECM_CACHE_KEY: "win64_msvc2022_ecm_${{needs.prepare.outputs.kf_version}}"
-      ECM_CHECKOUT_PATH: "${{github.workspace}}\\downloads\\extra-cmake-modules"
-      INSTALL_ECM_DIR: "${{github.workspace}}\\downloads\\extra-cmake-modules\\install"
-    steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
-    - name: Restore Discord Game SDK cache
-      uses: actions/cache/restore@v4
-      with:
-        key: "${{env.DISCORD_GAME_SDK_CACHE_KEY}}"
-        path: "${{env.DISCORD_GAME_SDK_PATH}}"
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: "${{env.QT_VERSION}}"
-        dir: "${{env.INSTALL_QT_DIR}}"
-        host: 'windows'
-        target: 'desktop'
-        arch: 'win64_msvc2022_64'
-        modules: 'qt5compat'
-        tools: 'tools_qtcreator_gui,qt.tools.qtcreator_gui tools_qtcreator_gui,qt.tools.qtcreatordev'
-        cache: true
-        cache-key-prefix: "${{env.QT_CACHE_KEY}}"
-    - name: Restore ECM cache
-      id: ecm-cache
-      uses: actions/cache/restore@v4
-      with:
-        key: "${{env.ECM_CACHE_KEY}}"
-        path: "${{env.INSTALL_ECM_DIR}}"
-    - name: Checkout ECM
-      uses: actions/checkout@v4
-      if: ${{ steps.ecm-cache.outputs.cache-hit != 'true' }}
-      with:
-        repository: "KDE/extra-cmake-modules"
-        path: "${{env.ECM_CHECKOUT_PATH}}"
-        ref: "v${{env.KF_VERSION}}"
-    - name: Build ECM
-      if: ${{ steps.ecm-cache.outputs.cache-hit != 'true' }}
-      run: |
-        cmake -S "${{env.ECM_CHECKOUT_PATH}}" -B "${{env.ECM_CHECKOUT_PATH}}\\build" `
-          -DCMAKE_INSTALL_PREFIX="${{env.INSTALL_ECM_DIR}}" `
-          -DBUILD_TESTING=OFF `
-          -DBUILD_QTHELP_DOCS=OFF `
-          -DBUILD_HTML_DOCS=OFF
-        cmake --build "${{env.ECM_CHECKOUT_PATH}}\\build" --config Release
-        cmake --install "${{env.ECM_CHECKOUT_PATH}}\\build"
-    - name: Save ECM cache
-      uses: actions/cache/save@v4
-      with:
-        key: ${{ steps.ecm-cache.outputs.cache-primary-key }}
-        path: "${{env.INSTALL_ECM_DIR}}"
-      if: ${{ steps.ecm-cache.outputs.cache-hit != 'true' }}
-    - name: Build
-      run: |
-        cmake -S . -B build -G "Visual Studio 17 2022" `
-          -DCMAKE_INSTALL_PREFIX=install `
-          -DCMAKE_PREFIX_PATH="${{env.INSTALL_ECM_DIR}};${{env.INSTALL_QT_DIR}}\\Qt\\Tools\\QtCreator" `
-          -DDISCORD_GAMESDK_PATH="${{env.DISCORD_GAME_SDK_PATH}}"
-        cmake --build build --config Release
-        cmake --install build
-    - name: Upload build
-      uses: actions/upload-artifact@v4
-      with:
-        name: "qtcreator${{needs.prepare.outputs.qtcreator_version_major}}-discord-rich-presence-plugin-windows-x64"
-        path: install/
