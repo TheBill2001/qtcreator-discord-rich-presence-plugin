@@ -19,7 +19,7 @@ if(NOT DISCORD_GAMESDK_PATH STREQUAL "")
 endif()
 
 find_library(DiscordGameSDK_LIBRARY
-    NAMES discord_game_sdk discord_game_sdk.dll discord_game_sdk.dylib discord_game_sdk.so
+    NAMES discord_game_sdk discord_game_sdk.dll.lib discord_game_sdk.dylib discord_game_sdk.so
     HINTS "${DiscordGameSDK_LIBDIR_HINTS}"
     ${DiscordGameSDK_NO_CMAKE_SYSTEM_PATH}
 )
@@ -54,19 +54,20 @@ find_package_handle_standard_args(DiscordGameSDK
 
 if(DiscordGameSDK_FOUND AND NOT TARGET Discord::GameSDK)
     add_library(Discord::GameSDK SHARED IMPORTED)
-    set_target_properties(Discord::GameSDK PROPERTIES
-        IMPORTED_LOCATION "${DiscordGameSDK_LIBRARY}"
-        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${DiscordGameSDK_INCLUDE_DIR}"
-        # IMPORTED_NO_SONAME TRUE # IMPORTANT!!
-    )
-
     if(WIN32)
-        cmake_path(APPEND_STRING DiscordGameSDK_LIBRARY ".lib" OUTPUT_VARIABLE DiscordGameSDK_IMPLIB)
-        if(NOT EXISTS "${DiscordGameSDK_IMPLIB}")
-            message(FATAL_ERROR "Missing import library discord_game_sdk.dll.lib")
+        cmake_path(REMOVE_EXTENSION DiscordGameSDK_LIBRARY LAST_ONLY OUTPUT_VARIABLE DiscordGameSDK_DLL)
+        if(NOT EXISTS "${DiscordGameSDK_DLL}")
+            message(FATAL_ERROR "Missing library discord_game_sdk.dll")
         endif()
         set_target_properties(Discord::GameSDK PROPERTIES
-            IMPORTED_IMPLIB "${DiscordGameSDK_IMPLIB}"
+            IMPORTED_LOCATION "${DiscordGameSDK_DLL}"
+            IMPORTED_IMPLIB "${DiscordGameSDK_LIBRARY}"
+        )
+    else()
+        set_target_properties(Discord::GameSDK PROPERTIES
+            IMPORTED_LOCATION "${DiscordGameSDK_LIBRARY}"
+            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${DiscordGameSDK_INCLUDE_DIR}"
+            # IMPORTED_NO_SONAME TRUE # IMPORTANT!!
         )
     endif()
 endif()
