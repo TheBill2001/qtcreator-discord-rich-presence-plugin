@@ -32,8 +32,6 @@ include(ECMQtDeclareLoggingCategory)
 include(KDEClangFormat)
 include(KDEGitCommitHooks)
 
-set(CMAKE_AUTOUIC ON)
-
 if(BUILD_PORTABLE AND NOT DISCORD_GAMESDK_PATH)
     include(FetchContent)
     FetchContent_Declare(DiscordGameSDKDownload
