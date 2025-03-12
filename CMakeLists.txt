@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(DiscordRichPresencePlugin VERSION 0.1.0 LANGUAGES CXX)
+project(DiscordRichPresencePlugin VERSION 1.0.0 LANGUAGES CXX)
 
 if(WIN32 OR (UNIX AND APPLE))
     option(BUILD_PORTABLE "Build plugin as portable with Discord Game SDK also deployed" ON)
