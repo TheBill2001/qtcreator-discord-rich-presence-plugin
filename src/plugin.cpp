@@ -87,11 +87,12 @@ void DiscordRichPresencePlugin::timerEvent(QTimerEvent *event)
 void DiscordRichPresencePlugin::init()
 {
     {
-        m_lib.setFileName(u"discord_game_sdk"_s);
+        // Prioritize bundled sdk
+        auto spec = ExtensionSystem::PluginManager::specForPlugin(this);
+        const auto pluginLibPath = spec->filePath().parentDir().resolvePath(u"discord_game_sdk"_s).toFSPathString();
+        m_lib.setFileName(pluginLibPath);
         if (!m_lib.load()) {
-            auto spec = ExtensionSystem::PluginManager::specForPlugin(this);
-            const auto pluginLibPath = spec->filePath().parentDir().resolvePath(u"discord_game_sdk"_s).toFSPathString();
-            m_lib.setFileName(pluginLibPath);
+            m_lib.setFileName(u"discord_game_sdk"_s);
             if (!m_lib.load()) {
                 return;
             }
@@ -112,9 +113,15 @@ void DiscordRichPresencePlugin::init()
         if (discordCreateFuncPtr) {
             auto result = discordCreateFuncPtr(DISCORD_VERSION, &params, &discord->core);
             if (result != DiscordResult_Ok) {
-                const auto message = Tr::tr("Cannot create Discord Game SDK instance. Error %1.").arg(discordResultString(result));
-                logCrit().noquote() << message;
-                Core::MessageManager::writeFlashing(message);
+                if (result == DiscordResult_InternalError) {
+                    const auto message = Tr::tr("Cannot connect to Discord Client. Error %1. Is Discord Running?").arg(discordResultString(result));
+                    logCrit().noquote() << message;
+                    Core::MessageManager::writeFlashing(message);
+                } else {
+                    const auto message = Tr::tr("Cannot connect to Discord Client. Error %1.").arg(discordResultString(result));
+                    logCrit().noquote() << message;
+                    Core::MessageManager::writeFlashing(message);
+                }
                 return m_discord.reset();
             }
         }
