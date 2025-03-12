@@ -235,6 +235,7 @@ jobs:
   release:
     name: Create release
     if: contains(github.ref, '/tags/v')
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
