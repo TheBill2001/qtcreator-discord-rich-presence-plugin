@@ -1,11 +1,11 @@
 #ifndef PLUGINCONSTANTS_HPP
 #define PLUGINCONSTANTS_HPP
 
-#include <discord-game-sdk/types.h>
+#include <discord_game_sdk.h>
 
 namespace DiscordRichPresence::Constants
 {
-constexpr discord::ClientId DISCORD_CLIENT_ID = @DISCORD_CLIENT_ID@;
+constexpr DiscordClientId DISCORD_CLIENT_ID = @DISCORD_CLIENT_ID@;
 
 constexpr char PLUGIN_ID[] = "com.thebill2001.qtcreator.discordrichpresence";
 constexpr char RELOAD_ACTION_ID[] = "com.thebill2001.qtcreator.discordrichpresence.reload";

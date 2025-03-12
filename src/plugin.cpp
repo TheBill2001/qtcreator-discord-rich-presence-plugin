@@ -3,6 +3,8 @@
 #include "plugincommon.hpp"
 #include "pluginconstants.hpp"
 
+#include <cstring>
+
 #include <QAction>
 #include <QDateTime>
 #include <QTimerEvent>
@@ -11,15 +13,37 @@
 #include <coreplugin/coreconstants.h>
 #include <coreplugin/editormanager/editormanager.h>
 #include <coreplugin/editormanager/ieditor.h>
+#include <coreplugin/messagemanager.h>
 #include <extensionsystem/iplugin.h>
+#include <extensionsystem/pluginmanager.h>
+#include <extensionsystem/pluginspec.h>
 #include <projectexplorer/project.h>
 #include <projectexplorer/projecttree.h>
+#include <utils/filepath.h>
 #include <utils/mimeconstants.h>
+
+#include <discord_game_sdk.h>
+
+using namespace Qt::Literals::StringLiterals;
 
 namespace DiscordRichPresence::Internal
 {
+using DiscordCreateFuncPtr = EDiscordResult (*)(DiscordVersion, DiscordCreateParams *, IDiscordCore **);
+
+struct Discord {
+    IDiscordCore *core = nullptr;
+
+    ~Discord()
+    {
+        if (core) {
+            core->destroy(core);
+        }
+    }
+};
+
 DiscordRichPresencePlugin::DiscordRichPresencePlugin()
-    : m_groupId{QUuid::createUuid()}
+    : m_lib{this}
+    , m_groupId{QUuid::createUuid()}
     , m_timestamp{QDateTime::currentSecsSinceEpoch()}
 {
 }
@@ -54,8 +78,8 @@ void DiscordRichPresencePlugin::initialize()
 void DiscordRichPresencePlugin::timerEvent(QTimerEvent *event)
 {
     if (m_timer.id() == event->id()) {
-        if (!m_core.isNull()) {
-            m_core->RunCallbacks();
+        if (!m_discord.isNull() && m_discord->core) {
+            m_discord->core->run_callbacks(m_discord->core);
         }
     }
 }
@@ -63,36 +87,57 @@ void DiscordRichPresencePlugin::timerEvent(QTimerEvent *event)
 void DiscordRichPresencePlugin::init()
 {
     {
-        discord::Core *newCore{};
-        auto result = discord::Core::Create(Constants::DISCORD_CLIENT_ID, DiscordCreateFlags_NoRequireDiscord, &newCore);
-        if (!newCore) {
-            if (result != discord::Result::InternalError) {
-                logCrit() << Tr::tr("Cannot create Discord Game SDK instance. Error %1.").arg(discordResultString(result));
+        m_lib.setFileName(u"discord_game_sdk"_s);
+        if (!m_lib.load()) {
+            auto spec = ExtensionSystem::PluginManager::specForPlugin(this);
+            const auto pluginLibPath = spec->filePath().parentDir().resolvePath(u"discord_game_sdk"_s).toFSPathString();
+            m_lib.setFileName(pluginLibPath);
+            if (!m_lib.load()) {
+                return;
             }
-            m_core.reset();
-            return;
         }
-
-        m_core.reset(newCore);
     }
 
-    static const std::function<void(discord::LogLevel, const char *)> logHock = [](discord::LogLevel level, const char *message) {
+    {
+        Discord *discord = new Discord();
+
+        DiscordCreateParams params;
+        DiscordCreateParamsSetDefault(&params);
+        params.client_id = DiscordRichPresence::Constants::DISCORD_CLIENT_ID;
+        params.flags = DiscordCreateFlags_NoRequireDiscord;
+        params.events = nullptr;
+        params.event_data = &discord;
+
+        DiscordCreateFuncPtr discordCreateFuncPtr = (DiscordCreateFuncPtr)m_lib.resolve("DiscordCreate");
+        if (discordCreateFuncPtr) {
+            auto result = discordCreateFuncPtr(DISCORD_VERSION, &params, &discord->core);
+            if (result != DiscordResult_Ok) {
+                const auto message = Tr::tr("Cannot create Discord Game SDK instance. Error %1.").arg(discordResultString(result));
+                logCrit().noquote() << message;
+                Core::MessageManager::writeFlashing(message);
+                return m_discord.reset();
+            }
+        }
+
+        m_discord.reset(discord);
+    }
+
+    m_discord->core->set_log_hook(m_discord->core, DiscordLogLevel_Debug, nullptr, [](void *, EDiscordLogLevel level, char const *message) {
         switch (level) {
-        case discord::LogLevel::Error:
+        case DiscordLogLevel_Error:
             logCrit("%s", message);
             break;
-        case discord::LogLevel::Warn:
+        case DiscordLogLevel_Warn:
             logWarn("%s", message);
             break;
-        case discord::LogLevel::Info:
+        case DiscordLogLevel_Info:
             logInfo("%s", message);
             break;
-        case discord::LogLevel::Debug:
+        case DiscordLogLevel_Debug:
             logDebug("%s", message);
             break;
         }
-    };
-    m_core->SetLogHook(discord::LogLevel::Debug, logHock);
+    });
 
     logInfo() << Tr::tr("Discord Rich Presence connected.");
 
@@ -101,63 +146,66 @@ void DiscordRichPresencePlugin::init()
 
 void DiscordRichPresencePlugin::updateActivity()
 {
-    if (m_core.isNull()) {
+    if (m_discord.isNull() && !m_discord->core) {
         return;
     }
 
     auto editor = Core::EditorManager::currentEditor();
     auto project = ProjectExplorer::ProjectTree::currentProject();
 
-    discord::Activity activity;
-    activity.SetInstance(true);
-    activity.GetTimestamps().SetStart(m_timestamp);
-    activity.GetTimestamps().SetEnd(0);
-    activity.GetParty().SetId("");
-    activity.GetParty().GetSize().SetCurrentSize(0);
-    activity.GetParty().GetSize().SetMaxSize(0);
-    activity.GetParty().SetPrivacy(discord::ActivityPartyPrivacy::Public);
-    activity.GetSecrets().SetJoin("");
-    activity.GetSecrets().SetMatch("");
-    activity.GetSecrets().SetSpectate("");
+    DiscordActivity activity;
+    activity.instance = true;
+    activity.timestamps.start = m_timestamp;
+    activity.timestamps.end = 0;
+    assignChar(activity.party.id, qPrintable(m_groupId.toString(QUuid::WithoutBraces)));
+    activity.party.size.current_size = 0;
+    activity.party.size.max_size = 0;
+    activity.party.privacy = DiscordActivityPartyPrivacy_Public;
+    assignChar(activity.secrets.join, "");
+    assignChar(activity.secrets.match, "");
+    assignChar(activity.secrets.spectate, "");
 
-    auto asset = &activity.GetAssets();
+    auto assets = &activity.assets;
 
     if (editor) {
         if (project) {
-            activity.SetState(qPrintable(Tr::tr(Constants::STATE_WORKING_ON_PROJECT)));
+            assignChar(activity.state, qPrintable(Tr::tr(Constants::STATE_WORKING_ON_PROJECT)));
             if (editor->isDesignModePreferred()) {
-                activity.SetDetails(
-                    qPrintable(Tr::tr("%1's UI: %2", "'%1' is project name.").arg(project->displayName(), editor->document()->filePath().fileName())));
+                assignChar(activity.details,
+                           qPrintable(Tr::tr("%1's UI: %2", "'%1' is project name.").arg(project->displayName(), editor->document()->filePath().fileName())));
             } else {
-                activity.SetDetails(
-                    qPrintable(Tr::tr("%1's file: %2", "'%1' is project name.").arg(project->displayName(), editor->document()->filePath().fileName())));
+                assignChar(activity.details,
+                           qPrintable(Tr::tr("%1's file: %2", "'%1' is project name.").arg(project->displayName(), editor->document()->filePath().fileName())));
             }
         } else {
-            activity.SetDetails(qPrintable(editor->document()->filePath().fileName()));
+            assignChar(activity.details, qPrintable(editor->document()->filePath().fileName()));
             if (editor->isDesignModePreferred()) {
-                activity.SetState(qPrintable(Tr::tr(Constants::STATE_DESIGN_UI)));
+                assignChar(activity.state, qPrintable(Tr::tr(Constants::STATE_DESIGN_UI)));
             } else {
-                activity.SetState(qPrintable(Tr::tr(Constants::STATE_EDITING_FILE)));
+                assignChar(activity.state, qPrintable(Tr::tr(Constants::STATE_EDITING_FILE)));
             }
         }
     } else {
         if (project) {
-            activity.SetState(qPrintable(Tr::tr(Constants::STATE_WORKING_ON_PROJECT)));
-            activity.SetDetails(qPrintable(Tr::tr("Project %1").arg(project->displayName())));
+            assignChar(activity.state, qPrintable(Tr::tr(Constants::STATE_WORKING_ON_PROJECT)));
+            assignChar(activity.details, qPrintable(Tr::tr("Project %1").arg(project->displayName())));
         } else {
-            activity.SetState(qPrintable(Tr::tr(Constants::STATE_IDLE)));
-            activity.SetDetails(qPrintable(Tr::tr(Constants::DETAILS_STARTUP_SCREEN)));
+            assignChar(activity.state, qPrintable(Tr::tr(Constants::STATE_IDLE)));
+            assignChar(activity.details, qPrintable(Tr::tr(Constants::DETAILS_STARTUP_SCREEN)));
         }
     }
 
-    asset->SetLargeImage(Constants::MAIN_LARGE_IMAGE);
-    asset->SetLargeText(qPrintable(Tr::tr(Constants::MAIN_LARGE_TEXT)));
-    asset->SetSmallImage("");
-    asset->SetSmallText("");
+    assignChar(assets->large_image, Constants::MAIN_LARGE_IMAGE);
+    assignChar(assets->large_text, qPrintable(Tr::tr(Constants::MAIN_LARGE_TEXT)));
+    assignChar(assets->small_image, "");
+    assignChar(assets->small_text, "");
 
-    m_core->ActivityManager().UpdateActivity(activity, [](discord::Result result) {
-        if (result != discord::Result::Ok && result != discord::Result::TransactionAborted) {
-            logCrit().noquote() << Tr::tr("Cannot update Discord Activity. Error %1.").arg(discordResultString(result));
+    auto activityManager = m_discord->core->get_activity_manager(m_discord->core);
+    activityManager->update_activity(activityManager, &activity, nullptr, [](void *, EDiscordResult result) {
+        if (result != DiscordResult_Ok && result != DiscordResult_TransactionAborted) {
+            const auto message = Tr::tr("Cannot update Discord Activity. Error %1.").arg(discordResultString(result));
+            logCrit().noquote() << message;
+            Core::MessageManager::writeFlashing(message);
         }
     });
 }

@@ -59,20 +59,6 @@ find_package(QtCreator REQUIRED COMPONENTS
 
 find_package(DiscordGameSDK REQUIRED COMPONENTS)
 
-if(BUILD_PORTABLE)
-    if(LINUX OR (UNIX AND NOT APPLE))
-        configure_file("${DiscordGameSDK_LIBRARY}" "${CMAKE_CURRENT_BINARY_DIR}/discord-game-sdk/libdiscord-game-sdk.so" COPYONLY)
-        set(DiscordGameSDK_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/discord-game-sdk/libdiscord-game-sdk.so")
-        set_target_properties(Discord::GameSDK PROPERTIES
-            IMPORTED_LOCATION "${DiscordGameSDK_LIBRARY}"
-        )
-    endif()
-
-    set_target_properties(Discord::GameSDK PROPERTIES
-        IMPORTED_NO_SONAME TRUE
-    )
-endif()
-
 configure_file(src/pluginconstants.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/plugin/pluginconstants.hpp" @ONLY)
 
 add_qtc_plugin(${PROJECT_NAME}
@@ -82,10 +68,7 @@ add_qtc_plugin(${PROJECT_NAME}
     DEPENDS
         QtCreator::ExtensionSystem
         QtCreator::Utils
-        Discord::GameSDK
     SOURCES
-        ${DiscordGameSDK_Cpp_HEADERS}
-        ${DiscordGameSDK_Cpp_SOURCES}
         src/plugincommon.hpp src/pluginconstants.hpp.in
         src/plugin.hpp src/plugin.cpp
 )
@@ -107,7 +90,7 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
         "${CMAKE_CURRENT_BINARY_DIR}/plugin"
-        "${DiscordGameSDK_Cpp_INCLUDE_DIR}"
+        "${DiscordGameSDK_INCLUDE_DIR}"
 )
 
 qt_add_translations(${PROJECT_NAME}

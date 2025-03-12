@@ -2,17 +2,17 @@
 #define PLUGIN_HPP
 
 #include <QBasicTimer>
+#include <QLibrary>
 #include <QUuid>
 
 #include <coreplugin/editormanager/ieditor.h>
 #include <extensionsystem/iplugin.h>
 
-#include <discord-game-sdk/core.h>
-
 namespace DiscordRichPresence
 {
 namespace Internal
 {
+struct Discord;
 class DiscordRichPresencePlugin final : public ExtensionSystem::IPlugin
 {
     Q_OBJECT
@@ -31,8 +31,9 @@ protected:
     void timerEvent(QTimerEvent *event) override;
 
 private:
+    QLibrary m_lib;
+    QScopedPointer<Discord> m_discord;
     QBasicTimer m_timer;
-    QScopedPointer<discord::Core> m_core;
 
     const QUuid m_groupId;
     const qint64 m_timestamp;
