@@ -163,7 +163,6 @@ jobs:
         path: ${{ env.ECM_INSTALL_DIR }}
       if: ${{ steps.ecm-cache.outputs.cache-hit != 'true' }}
     - name: Build plugin
-      id: build-step
       run: |
         mkdir -p artifacts
 
@@ -189,49 +188,28 @@ jobs:
         esac
 
         cmake --install build
-
-        ARTIFACT_NAME="qtcreator${{ steps.qtcreator_version_major.outputs.qtcreator_version_major }}-discord-rich-presence-plugin-${{ matrix.config.qtc_platform }}.zip"
-
-        pushd install
-        zip -r ../artifacts/"$ARTIFACT_NAME" .
-        popd
-
-        echo "artifact_name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
-        echo "artifact_path=artifacts/$ARTIFACT_NAME" >> $GITHUB_OUTPUT
-
-        if [[ "${{ runner.os }}" == "Linux" ]]; then
-          cmake -S . -B build_portable \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_INSTALL_PREFIX=install_portable \
-              -DCMAKE_PREFIX_PATH="${{ env.ECM_INSTALL_DIR }};${{ env.QT_CREATOR_DIR }}" \
-              -DDISCORD_GAMESDK_PATH="${{ env.DISCORD_GAME_SDK_PATH }}" \
-              -DBUILD_PORTABLE=ON
-          cmake --build build_portable
-          cmake --install build_portable
-
-          PORTABLE_ARTIFACT_NAME="qtcreator${{ steps.qtcreator_version_major.outputs.qtcreator_version_major }}-discord-rich-presence-plugin-${{ matrix.config.qtc_platform }}-portable.zip"
-
-          pushd install_portable
-          zip -r ../artifacts/"PORTABLE_ARTIFACT_NAME" .
-          popd
-
-          echo "portable_artifact_name=$PORTABLE_ARTIFACT_NAME" >> $GITHUB_OUTPUT
-          echo "portable_artifact_path=artifacts/$PORTABLE_ARTIFACT_NAME" >> $GITHUB_OUTPUT
-        fi
-    - id: qtcreator_version_major
+    - name: Build portable plugin for Linux
+      if: ${{ runner.os == 'Linux' }}
       run: |
-        echo "qtcreator_version_major=${QT_CREATOR_VERSION%%.*}" >> $GITHUB_OUTPUT
+        cmake -S . -B build_portable \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=install_portable \
+            -DCMAKE_PREFIX_PATH="${{ env.ECM_INSTALL_DIR }};${{ env.QT_CREATOR_DIR }}" \
+            -DDISCORD_GAMESDK_PATH="${{ env.DISCORD_GAME_SDK_PATH }}" \
+            -DBUILD_PORTABLE=ON
+        cmake --build build_portable
+        cmake --install build_portable
     - name: Upload build artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.build-step.outputs.artifact_name }}
-        path: ${{ steps.build-step.outputs.artifact_path }}
+        name: qtcreator${{ env.QT_CREATOR_VERSION }}-discord-rich-presence-plugin-${{ matrix.config.qtc_platform }}
+        path: install
     - name: Upload portable build artifact
       if: ${{ runner.os == 'Linux' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.build-step.outputs.portable_artifact_name }}
-        path: ${{ steps.build-step.outputs.portable_artifact_path }}
+        name: qtcreator${{ env.QT_CREATOR_VERSION }}-discord-rich-presence-plugin-${{ matrix.config.qtc_platform }}-portable
+        path: install_portable
   release:
     name: Create release
     if: contains(github.ref, '/tags/v')
@@ -242,7 +220,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true
+          merge-multiple: false
+      - name: Re-package artifacts for release
+        run: |
+          pushd artifacts
+
+          for i in *; do
+            pushd "$i"
+            zip -r ../"$i".zip .
+            popd
+          done
+
+          popd
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -257,5 +246,5 @@ jobs:
             Install the plugin by open Qt Creator's Plugins dialog, `Help > About Plugins > Install Plugin`. Then select the **unextracted** package.
           prerelease: false
           draft: false
-          files: artifacts/*
+          files: artifacts/*.zip
 
