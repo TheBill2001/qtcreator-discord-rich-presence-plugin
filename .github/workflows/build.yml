@@ -4,6 +4,10 @@ name: Build
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+    tags:
+      - v*
 
 env:
   QT_VERSION: "6.8.2"
@@ -233,7 +237,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref }}
-          name: ${{ github.ref }}
+          name: ${{ github.ref_name }}
           body: |
             Release for Qt Creator ${{ env.QT_CREATOR_VERSION }}.
 
