@@ -4,14 +4,12 @@ name: Build
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
     tags:
       - v*
 
 env:
-  QT_VERSION: "6.8.2"
-  QT_CREATOR_VERSION: "15.0.0"
+  QT_VERSION: "6.5.3"
+  QT_CREATOR_VERSION: "16.0.0"
   KF_VERSION: "6.11.0"
   DISCORD_GAME_SDK_VERSION: "3.2.1"
 
