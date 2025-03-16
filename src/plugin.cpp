@@ -153,7 +153,7 @@ void DiscordRichPresencePlugin::init()
 
 void DiscordRichPresencePlugin::updateActivity()
 {
-    if (m_discord.isNull() && !m_discord->core) {
+    if (m_discord.isNull() || !m_discord->core) {
         return;
     }
 
