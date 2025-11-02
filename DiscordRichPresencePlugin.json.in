@@ -1,10 +1,10 @@
 {
-    "Id" : "com.thebill2001.qtcreator.discordrichpresence",
+    "Id" : "qtcreator.discordrichpresence",
     "Name" : "Discord Rich Presence",
     "Version" : "@PROJECT_VERSION@",
-    "Vendor" : "TheBill2001",
+    "Vendor" : "Trần Nam Tuấn",
     "VendorId" : "thebill2001",
-    "Copyright" : "(C) TheBill2001",
+    "Copyright" : "2025 (C) Trần Nam Tuấn",
     "License" : "GPL-3.0",
     "Description" : "Discord Rich Presence plugin for Qt Creator",
     "Url" : "https://github.com/thebill2001/qtcreator-discordrichpresence-plugin",

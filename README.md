@@ -21,10 +21,10 @@ Discord needs to already be opened before this plugin is loaded. In case of Disc
 
 - Build tools:
     - CMake >=3.24
-    - KDE Extra CMake Modules >=6.8.0
+    - KDE Extra CMake Modules >=6.0.0
     
 - Build dependencies:
-    - Qt >=6.8.0 - Core, Qt 5 compatibility module (build only)
+    - Qt >=6.5.3 - Core, Linguist Tools
     - Qt Creator development package
     
 - Runtime dependencies:

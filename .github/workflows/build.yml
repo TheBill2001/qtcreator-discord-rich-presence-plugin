@@ -8,8 +8,8 @@ on:
       - v*
 
 env:
-  QT_VERSION: "6.8.2"
-  QT_CREATOR_VERSION: "16.0.0"
+  QT_VERSION: "6.9.2"
+  QT_CREATOR_VERSION: "18.0.0"
   KF_VERSION: "6.0.0"
   DISCORD_GAME_SDK_VERSION: "3.2.1"
 

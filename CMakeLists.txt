@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(DiscordRichPresencePlugin VERSION 1.0.1 LANGUAGES CXX)
+project(DiscordRichPresencePlugin VERSION 1.0.3 LANGUAGES CXX)
 
 if(WIN32 OR (UNIX AND APPLE))
     option(BUILD_PORTABLE "Build plugin as portable with Discord Game SDK also deployed" ON)
@@ -19,23 +19,29 @@ if(NOT DISCORD_CLIENT_ID)
     message(FATAL_ERROR "Discord client ID is not found")
 endif()
 
-set(QT6_MIN_VERSION 6.7.0)
+# Version requirements. Keep inline with Qt Creator.
+set(QT6_MIN_VERSION 6.5.3)
 set(KF6_MIN_VERSION 6.0.0)
+set(DISCORD_SDK_VERSION 3.2.1)
+set(QTCREATOR_MIN_VERSION 16.0.0)
 
 find_package(ECM ${KF6_MIN_VERSION} REQUIRED NO_MODULE)
 list(APPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 include(KDEInstallDirs)
+
 include(KDECMakeSettings NO_POLICY_SCOPE)
-include(ECMSetupVersion)
-include(ECMQtDeclareLoggingCategory)
 include(KDEClangFormat)
 include(KDEGitCommitHooks)
+
+include(ECMDeprecationSettings)
+include(ECMQtDeclareLoggingCategory)
+include(ECMSetupVersion)
 
 if(BUILD_PORTABLE AND NOT DISCORD_GAMESDK_PATH)
     include(FetchContent)
     FetchContent_Declare(DiscordGameSDKDownload
-        URL "https://dl-game-sdk.discordapp.net/3.2.1/discord_game_sdk.zip"
+        URL "https://dl-game-sdk.discordapp.net/${DISCORD_SDK_VERSION}/discord_game_sdk.zip"
     )
     FetchContent_MakeAvailable(DiscordGameSDKDownload)
     set(DISCORD_GAMESDK_PATH "${discordgamesdkdownload_SOURCE_DIR}")
@@ -57,7 +63,15 @@ find_package(QtCreator REQUIRED COMPONENTS
     ProjectExplorer
 )
 
+if(IDE_VERSION VERSION_LESS "${QTCREATOR_MIN_VERSION}")
+    message(FATAL_ERROR "Required Qt Creator ${QTCREATOR_MIN_VERSION} or newer!")
+endif()
+
 find_package(DiscordGameSDK REQUIRED COMPONENTS)
+
+ecm_set_disabled_deprecation_versions(
+    QT "${QT6_MIN_VERSION}"
+)
 
 configure_file(src/pluginconstants.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/plugin/pluginconstants.hpp" @ONLY)
 
