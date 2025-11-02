@@ -72,7 +72,7 @@ jobs:
           qt_arch: linux_gcc_64
           qtc_platform: linux_x64
         - name: MacOS x64
-          runner: macos-13
+          runner: macos-15-intel
           qt_host: mac
           qt_arch: clang_64
           qtc_platform: mac_x64
@@ -87,14 +87,13 @@ jobs:
         path: ${{ env.DISCORD_GAME_SDK_PATH }}
         enableCrossOsArchive: true
     - name: Download Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v4
       with:
         version: ${{ env.QT_VERSION }}
         dir: downloads
         host: ${{ matrix.config.qt_host }}
         target: desktop
         arch: ${{ matrix.config.qt_arch }}
-        modules: qt5compat
         cache: true
     - name: Restore Qt Creator cache
       id: qtcreator-cache
